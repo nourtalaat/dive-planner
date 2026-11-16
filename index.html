@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b2e4a">
+<title>Dive Planner · Recreational Dive Checklist</title>
+<meta name="description" content="Interactive recreational dive checklist with BWRAF buddy check and optional Nitrox section.">
+<style>
+  :root{
+    --navy:#0b2e4a; --ocean:#1f5f99; --teal:#127c8a; --green:#2e8b3e; --amber:#c98a12; --red:#b3261e;
+    --nitrox-y:#f2c230; --ink:#1b2329; --muted:#5a6670; --line:#d6e1e6; --bg:#f3f7f9; --card:#fff;
+    --pale:#eef5f7; --ok:#2e8b3e; --warn:#b3261e;
+    --radius:12px;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-size:16px;line-height:1.45}
+  header.top{background:var(--navy);color:#fff;padding:18px 16px 14px;position:relative}
+  header.top::after{content:"";position:absolute;left:0;right:0;bottom:-4px;height:4px;background:var(--teal)}
+  .wrap{max-width:760px;margin:0 auto;padding:0 14px}
+  h1{margin:0;font-size:1.45rem;letter-spacing:.2px}
+  .sub{opacity:.8;font-size:.9rem;margin-top:2px}
+
+  /* sticky progress */
+  .bar{position:sticky;top:0;z-index:20;background:#fff;border-bottom:1px solid var(--line);box-shadow:0 2px 8px rgba(11,46,74,.06)}
+  .bar .wrap{display:flex;align-items:center;gap:10px;padding-top:9px;padding-bottom:9px}
+  .meter{flex:1;height:10px;background:var(--pale);border-radius:99px;overflow:hidden}
+  .meter > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--teal),var(--green));transition:width .25s}
+  .pct{font-variant-numeric:tabular-nums;font-weight:700;color:var(--navy);min-width:3.2em;text-align:right;font-size:.95rem}
+  .btn{appearance:none;border:1px solid var(--line);background:#fff;color:var(--navy);border-radius:9px;
+       padding:8px 11px;font:inherit;font-size:.85rem;font-weight:600;cursor:pointer;white-space:nowrap}
+  .btn:hover{background:var(--pale)}
+  .btn.danger{color:var(--red);border-color:#f0c7c4}
+  .btn.danger.armed{background:var(--red);color:#fff;border-color:var(--red)}
+
+  main{padding:16px 0 60px}
+  .card{background:var(--card);border-radius:var(--radius);border:1px solid var(--line);margin:0 0 14px;overflow:hidden}
+  .card > summary, .card > .hd{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;
+       padding:12px 14px;color:#fff;font-weight:700;font-size:1rem;user-select:none}
+  .card > summary::-webkit-details-marker{display:none}
+  .card > summary .count{margin-left:auto;font-weight:600;font-size:.82rem;background:rgba(255,255,255,.18);
+       padding:2px 9px;border-radius:99px;font-variant-numeric:tabular-nums}
+  .card > summary .chev{transition:transform .2s;opacity:.8}
+  .card[open] > summary .chev{transform:rotate(90deg)}
+  .card.done > summary .count{background:#fff;color:var(--green)}
+  .card.done > summary .count::before{content:"✓ "}
+
+  ul.items{list-style:none;margin:0;padding:0}
+  ul.items li{border-top:1px solid var(--line)}
+  ul.items li:first-child{border-top:0}
+  label.item{display:flex;gap:12px;align-items:flex-start;padding:11px 14px;cursor:pointer}
+  label.item:hover{background:#fafcfd}
+  label.item input[type=checkbox]{appearance:none;flex:0 0 24px;width:24px;height:24px;margin:0;border:2px solid #9fb3bd;
+       border-radius:7px;background:#fff;display:grid;place-content:center;cursor:pointer;transition:.15s}
+  label.item input[type=checkbox]::after{content:"";width:12px;height:7px;border:3px solid #fff;border-top:0;border-right:0;
+       transform:rotate(-45deg) translate(1px,-1px);opacity:0}
+  label.item input[type=checkbox]:checked{background:var(--green);border-color:var(--green)}
+  label.item input[type=checkbox]:checked::after{opacity:1}
+  label.item input[type=checkbox]:focus-visible{outline:3px solid #8cc9d3;outline-offset:2px}
+  .txt{flex:1;font-size:.94rem}
+  label.item:has(input:checked) .txt{color:var(--muted)}
+  .inl{display:inline-block;width:5.2em;padding:3px 6px;margin:0 3px;border:1px solid #9fb3bd;border-radius:6px;font:inherit;
+       font-size:.9rem;text-align:center;background:#fff}
+  .inl:focus{outline:2px solid var(--teal);border-color:var(--teal)}
+
+  /* plan */
+  .plan{padding:12px 14px 14px;display:grid;grid-template-columns:repeat(2,1fr);gap:10px 12px}
+  .plan .f{display:flex;flex-direction:column;gap:3px}
+  .plan .f.wide{grid-column:span 2}
+  .plan label{font-size:.75rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+  .plan input,.plan select{font:inherit;font-size:.95rem;padding:8px 10px;border:1px solid #b9c9d0;border-radius:8px;background:#fff;width:100%}
+  .plan input:focus,.plan select:focus{outline:2px solid var(--teal);border-color:var(--teal)}
+  @media (min-width:620px){ .plan{grid-template-columns:repeat(4,1fr)} .plan .f.wide{grid-column:span 2} }
+
+  /* BWRAF */
+  .bw{display:grid;grid-template-columns:78px 1fr;border-top:1px solid var(--line)}
+  .bw:first-of-type{border-top:0}
+  .bw .lt{display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;padding:8px 4px}
+  .bw .lt b{font-size:1.7rem;line-height:1}
+  .bw .lt span{font-size:.62rem;font-weight:700;letter-spacing:.6px;margin-top:3px;text-align:center}
+  .bw ul.items li:first-child{border-top:0}
+  .bw .lt.ok{box-shadow:inset 0 -5px 0 rgba(255,255,255,.55)}
+  .hint{font-size:.8rem;color:var(--muted);padding:9px 14px;background:var(--pale);border-top:1px solid var(--line)}
+
+  /* nitrox */
+  .toggle{display:flex;align-items:center;gap:12px;background:#fff7db;border:1px solid #f1df9e;border-left:5px solid var(--green);
+          border-right:5px solid var(--nitrox-y);border-radius:var(--radius);padding:12px 14px;margin:22px 0 14px;cursor:pointer}
+  .toggle strong{color:var(--navy)}
+  .switch{position:relative;width:46px;height:26px;flex:0 0 46px}
+  .switch input{opacity:0;width:0;height:0}
+  .switch i{position:absolute;inset:0;background:#c8d3d8;border-radius:99px;transition:.2s}
+  .switch i::after{content:"";position:absolute;left:3px;top:3px;width:20px;height:20px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+  .switch input:checked + i{background:var(--green)}
+  .switch input:checked + i::after{transform:translateX(20px)}
+  .switch input:focus-visible + i{outline:3px solid #8cc9d3;outline-offset:2px}
+  #nitrox[hidden]{display:none}
+
+  .calc{margin:0 0 14px;background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px}
+  .calc h3{margin:0 0 8px;font-size:.95rem;color:var(--teal)}
+  .calc .row{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:flex-end}
+  .calc .f{display:flex;flex-direction:column;gap:3px}
+  .calc label{font-size:.75rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+  .calc input{font:inherit;font-size:1rem;padding:7px 9px;border:1px solid #b9c9d0;border-radius:8px;width:7em}
+  .stat{display:flex;flex-direction:column}
+  .stat b{font-size:1.35rem;color:var(--navy);font-variant-numeric:tabular-nums}
+  .stat small{color:var(--muted);font-size:.74rem;text-transform:uppercase;letter-spacing:.4px;font-weight:600}
+  .alert{margin-top:10px;padding:8px 11px;border-radius:8px;font-size:.88rem;display:none}
+  .alert.show{display:block}
+  .alert.bad{background:#fdecec;color:var(--warn);border:1px solid #f3c2bf}
+  .alert.good{background:#e7f4ea;color:#1f6b2c;border:1px solid #bfe0c6}
+  .ref{font-size:.82rem;color:var(--muted);margin-top:10px;line-height:1.5}
+
+  footer{color:var(--muted);font-size:.78rem;text-align:center;padding:10px 14px 30px}
+
+  @media print{
+    .bar,.btn,.switch,footer .noprint{display:none!important}
+    body{background:#fff}
+    .card{break-inside:avoid;border-color:#bbb}
+    details.card > *{display:block}
+    details.card:not([open]) > ul,details.card:not([open]) > div{display:block!important}
+    header.top{padding:10px 16px}
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <h1>Recreational Dive Checklist</h1>
+    <div class="sub">Plan · gear · BWRAF buddy check · in-water · post-dive · optional Nitrox</div>
+  </div>
+</header>
+
+<div class="bar" role="region" aria-label="Progress">
+  <div class="wrap">
+    <div class="meter" aria-hidden="true"><i id="meterFill"></i></div>
+    <div class="pct" id="pct" aria-live="polite">0%</div>
+    <button class="btn" id="printBtn" type="button" title="Print or save as PDF">Print</button>
+    <button class="btn danger" id="resetBtn" type="button">New dive</button>
+  </div>
+</div>
+
+<main class="wrap" id="app">
+  <section class="card" aria-labelledby="planHd">
+    <div class="hd" id="planHd" style="background:var(--teal);cursor:default">Dive plan</div>
+    <div class="plan">
+      <div class="f wide"><label for="p_site">Site</label><input id="p_site" data-k="site" autocomplete="off"></div>
+      <div class="f"><label for="p_date">Date</label><input id="p_date" type="date" data-k="date"></div>
+      <div class="f"><label for="p_buddy">Buddy</label><input id="p_buddy" data-k="buddy" autocomplete="off"></div>
+      <div class="f"><label for="p_depth">Max depth (m)</label><input id="p_depth" type="number" inputmode="decimal" min="0" max="60" step="0.5" data-k="maxDepth"></div>
+      <div class="f"><label for="p_time">Bottom time (min)</label><input id="p_time" type="number" inputmode="numeric" min="0" data-k="bottomTime"></div>
+      <div class="f"><label for="p_turn">Turn pressure (bar)</label><input id="p_turn" type="number" inputmode="numeric" min="0" data-k="turn"></div>
+      <div class="f"><label for="p_res">Surface reserve (bar)</label><input id="p_res" type="number" inputmode="numeric" min="0" data-k="reserve" placeholder="50"></div>
+      <div class="f wide"><label for="p_entry">Entry / exit point</label><input id="p_entry" data-k="entry" autocomplete="off"></div>
+      <div class="f"><label for="p_lost">Lost-buddy search (min)</label><input id="p_lost" type="number" inputmode="numeric" min="0" data-k="lost" placeholder="1"></div>
+      <div class="f"><label for="p_gas">Gas</label>
+        <select id="p_gas" data-k="gas"><option value="air">Air</option><option value="nitrox">Nitrox (EANx)</option></select></div>
+    </div>
+  </section>
+
+  <div id="sections"></div>
+
+  <label class="toggle" for="nxToggle">
+    <span class="switch"><input type="checkbox" id="nxToggle"><i></i></span>
+    <span><strong>Nitrox (EANx) dive</strong><br><small>Shows the optional Nitrox checks and MOD calculator</small></span>
+  </label>
+
+  <div id="nitrox" hidden>
+    <div class="calc" aria-labelledby="calcHd">
+      <h3 id="calcHd">MOD calculator</h3>
+      <div class="row">
+        <div class="f"><label for="n_o2">Analysed O₂ %</label><input id="n_o2" type="number" inputmode="decimal" min="21" max="100" step="0.1" data-k="o2"></div>
+        <div class="f"><label for="n_pp">Max ppO₂ (bar)</label><input id="n_pp" type="number" inputmode="decimal" min="1" max="1.6" step="0.1" data-k="ppmax" placeholder="1.4"></div>
+        <div class="stat"><small>Use mix</small><b id="o_mix">–</b></div>
+        <div class="stat"><small>MOD</small><b id="o_mod">–</b></div>
+        <div class="stat"><small>MOD @1.6</small><b id="o_mod16">–</b></div>
+        <div class="stat"><small>ppO₂ at max depth</small><b id="o_ppd">–</b></div>
+      </div>
+      <div class="alert" id="o_alert" role="status"></div>
+      <div class="ref">O₂ reading is rounded <b>up</b> to the next whole % before calculating.
+        MOD = (ppO₂ ÷ fO₂ − 1) × 10 · ppO₂ = fO₂ × (depth/10 + 1) · CNS: stay ≤ 80%.</div>
+    </div>
+    <div id="nxSections"></div>
+  </div>
+</main>
+
+<footer>
+  Personal checklist — always follow your training, the dive briefing and your equipment manuals.<br>
+  <span class="noprint">Your entries are saved in this browser only.</span>
+</footer>
+
+<script>
+(() => {
+  const B = s => `<b>${s}</b>`;
+  const IN = (k, w) => `<input class="inl" data-k="${k}" inputmode="decimal" aria-label="${w}" type="number">`;
+
+  const SECTIONS = [
+    { id: "gear", title: "1 · Gear assembly", color: "var(--ocean)", items: [
+      "Cylinder: pressure checked on a gauge; valve O-ring present and undamaged; air smells and tastes clean.",
+      "BCD cam band slid over the cylinder at the right height and tightened — tug the valve to confirm it can't slip.",
+      "Regulator first stage fitted the right way round (hoses to the right), finger-tight on yoke / snug on DIN.",
+      "Low-pressure inflator hose connected to the BCD (and dry suit inflator, if worn).",
+      `Valve opened slowly, gauge pointed away; listen for leaks or free-flow. Pressure: ${IN("startBar","Starting pressure in bar")} bar`,
+      "BCD inflates, holds air, and every dump valve vents.",
+      "Weights: correct amount for suit and water; belt or pockets loaded and secured.",
+      "Dive computer charged, time set, and shows the right gas and conservatism settings.",
+      "Mask strap and fin straps/buckles intact; mask defogged.",
+      "Safety kit stowed where you can reach it: SMB/DSMB + reel, whistle, cutting tool, torch (if needed).",
+      "Exposure suit zips and seals OK; hood and gloves ready if needed.",
+    ]},
+    { id: "brief", title: "2 · Briefing & plan agreed with your buddy", color: "var(--teal)", items: [
+      "Max depth, bottom time and turn pressure agreed (dive plan above).",
+      "Entry and exit points, direction of travel and expected current / visibility understood.",
+      "Hand signals reviewed: OK, problem, low on air, out of air, turn, ascend, safety stop.",
+      "Lost-buddy procedure: search ~1 minute, then ascend and meet at the surface.",
+      "Out-of-air plan: which regulator each of you donates and where it is clipped.",
+    ]},
+    { id: "buddy", title: "3 · Buddy check — BWRAF", color: "var(--navy)", bwraf: [
+      { L: "B", name: "BCD", color: "var(--navy)", items: [
+        `${B("BCD check")} — inflator hose connected; inflate and deflate; every dump valve works.`,
+        `${B("Straps")} — shoulder, chest and waist straps fastened and snug; cylinder secure in the cam band.`,
+      ]},
+      { L: "W", name: "WEIGHTS", color: "var(--ocean)", items: [
+        `${B("Weight belt")} — on, right-hand quick release, free to drop (not trapped under straps). Integrated pockets clicked in and locked.`,
+      ]},
+      { L: "R", name: "RELEASES", color: "var(--teal)", items: [
+        `${B("Releases")} — show each other every quick release (weights, BCD shoulder and waist buckles) and how to open them in an emergency.`,
+      ]},
+      { L: "A", name: "AIR", color: "var(--green)", items: [
+        `${B("Air on")} — valve fully open.`,
+        `${B("Check pressure gauge")} — enough gas for the plan; the needle stays steady while breathing.`,
+        `${B("Test primary and secondary 2nd stages")} — 3–4 breaths from each while watching the gauge (a dipping needle = valve only partly open). Alternate air source clipped in the chest area, easy to see.`,
+      ]},
+      { L: "F", name: "FINAL OK", color: "var(--amber)", items: [
+        `${B("Dive computer")} — switched on / in dive mode, settings match the plan.`,
+        `${B("Mask and fins")} — on hand, straps OK, mask defogged.`,
+        "Streamlined: no dangling hoses or gauges; SMB, cutter and torch where you both expect them. Final OK signal.",
+      ]},
+    ], hint: "Memory aid: <b>B</b>CD · <b>W</b>eights · <b>R</b>eleases · <b>A</b>ir · <b>F</b>inal OK. Check your buddy's gear with your hands and eyes, not just by asking."},
+    { id: "entry", title: "4 · Entry & descent", color: "var(--ocean)", items: [
+      "Regulator in, hand on mask, BCD partly inflated before a giant stride or back roll.",
+      "Surface OK to buddy (and boat); quick bubble check on each other's valve and first stage.",
+      "Descend together on a signal; equalize early and often; stop and ascend a little if ears won't clear.",
+      "Check gauge and computer once at the bottom; adjust buoyancy and trim.",
+    ]},
+    { id: "during", title: "5 · During the dive", color: "var(--teal)", items: [
+      "Monitor depth, time, no-deco limit and gas pressure regularly — check your buddy's gas too.",
+      "Turn the dive at the agreed turn pressure or when the NDL gets short, whichever comes first.",
+      "Stay within arm's reach of your buddy; keep off the reef and don't touch marine life.",
+      "Ascend slowly (no faster than ~9 m/min, or your computer's ascent alarm), one hand up, venting the BCD.",
+      "Safety stop: 3 minutes at ~5 m.",
+      "Surface with your planned reserve (commonly 50 bar).",
+    ]},
+    { id: "post", title: "6 · Surface & post-dive", color: "var(--green)", items: [
+      "Inflate BCD at the surface; OK signal; deploy SMB if you're away from the boat or exit.",
+      "Close the valve, purge the regulator, and refit the dust cap before rinsing.",
+      `Log the dive: max depth, time, gas, start/end pressure, conditions. End pressure: ${IN("endBar","End pressure in bar")} bar`,
+      "Respect the surface interval your computer gives before the next dive.",
+      "No flying until your computer's no-fly time is over (typically 18–24 h after the last dive).",
+      "Rinse gear in fresh water and dry it in the shade.",
+    ]},
+  ];
+
+  const NITROX = [
+    { id: "n1", title: "N1 · Cylinder & gas analysis", color: "var(--green)", items: [
+      "Cylinder has a nitrox band and an oxygen-clean / service decal where required; valve type fits your first stage.",
+      "Regulator is rated by its manufacturer for the planned O₂ % (anything above 40% must be oxygen-clean).",
+      "Analyser calibrated on air (20.9%) right before use; steady, low flow over the sensor.",
+      "Mix analysed (or analysis witnessed) and the reading entered in the calculator above.",
+      "MOD is deeper than your planned max depth (see calculator).",
+      "Cylinder labelled with your name/initials, O₂ % and MOD; fill log signed.",
+    ]},
+    { id: "n2", title: "N2 · Dive computer", color: "var(--teal)", items: [
+      "Computer set to the analysed O₂ % (or left on air on purpose, and you'll track oxygen with tables).",
+      "Max ppO₂ set to 1.4 bar or lower; displayed MOD matches the calculator.",
+      `Day's CNS % checked — plan to stay under 80%. Current: ${IN("cns","Current CNS percent")} %`,
+      "Re-set after every cylinder change.",
+    ]},
+    { id: "n3", title: "N3 · Buddy check additions", color: "var(--navy)", items: [
+      "Tell each other your mix and MOD; both computers set the same way where possible.",
+      "Different mixes in the team: plan NDL on the leanest mix and MOD on the richest; follow the most conservative computer.",
+    ]},
+    { id: "n4", title: "N4 · In the water", color: "var(--red)", items: [
+      "Stay above the MOD; treat the MOD alarm as an immediate ascend signal.",
+      "Avoid hard exertion at depth and stay warm — both lower oxygen tolerance.",
+      "Signs of oxygen toxicity (twitching, visual or hearing changes, nausea, dizziness, confusion): signal buddy, controlled ascent, end the dive.",
+      "Plan gas as for air — nitrox doesn't reduce consumption.",
+    ]},
+    { id: "n5", title: "N5 · After the dive", color: "var(--green)", items: [
+      "Log the mix used (e.g. EAN32) and note the CNS % at the end of the dive.",
+      "Keep an oxygen-clean regulator off standard air cylinders; remove tape labels and dispose of them properly.",
+    ]},
+  ];
+
+  // ---------- state ----------
+  const KEY = "dive-planner-v1";
+  let state = { checks: {}, fields: {}, nitrox: false, open: {} };
+  try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && typeof s === "object") state = Object.assign(state, s); } catch (e) {}
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+
+  // ---------- render ----------
+  const itemHTML = (sid, i, html) => {
+    const id = `${sid}-${i}`;
+    return `<li><label class="item"><input type="checkbox" data-c="${id}" ${state.checks[id] ? "checked" : ""}>
+            <span class="txt">${html}</span></label></li>`;
+  };
+  const cardHTML = (s) => {
+    let body = "";
+    if (s.bwraf) {
+      let n = 0;
+      body = s.bwraf.map(g => `<div class="bw" data-group="${s.id}-${g.L}">
+          <div class="lt" style="background:${g.color}"><b>${g.L}</b><span>${g.name}</span></div>
+          <ul class="items">${g.items.map(t => itemHTML(s.id, n++, t)).join("")}</ul></div>`).join("")
+        + `<div class="hint">${s.hint}</div>`;
+    } else {
+      body = `<ul class="items">${s.items.map((t, i) => itemHTML(s.id, i, t)).join("")}</ul>`;
+    }
+    const open = state.open[s.id] !== false;
+    return `<details class="card" data-s="${s.id}" ${open ? "open" : ""}>
+      <summary style="background:${s.color}"><span class="chev" aria-hidden="true">▸</span>${s.title}<span class="count"></span></summary>
+      ${body}</details>`;
+  };
+  document.getElementById("sections").innerHTML = SECTIONS.map(cardHTML).join("");
+  document.getElementById("nxSections").innerHTML = NITROX.map(cardHTML).join("");
+
+  const nxToggle = document.getElementById("nxToggle");
+  const nxBox = document.getElementById("nitrox");
+  const gasSel = document.getElementById("p_gas");
+
+  // restore fields
+  document.querySelectorAll("[data-k]").forEach(el => {
+    const v = state.fields[el.dataset.k];
+    if (v !== undefined) el.value = v;
+  });
+  if (!state.fields.date) { const d = document.getElementById("p_date"); d.value = new Date().toISOString().slice(0, 10); }
+  const setNitrox = (on) => {
+    state.nitrox = on; nxToggle.checked = on; nxBox.hidden = !on;
+    gasSel.value = on ? "nitrox" : "air"; state.fields.gas = gasSel.value;
+  };
+  setNitrox(!!state.nitrox);
+
+  // ---------- progress ----------
+  const visibleCards = () => [...document.querySelectorAll("details.card")].filter(c => !c.closest("[hidden]"));
+  function progress() {
+    let done = 0, total = 0;
+    visibleCards().forEach(card => {
+      const boxes = card.querySelectorAll("input[type=checkbox][data-c]");
+      const d = [...boxes].filter(b => b.checked).length;
+      done += d; total += boxes.length;
+      card.querySelector(".count").textContent = `${d}/${boxes.length}`;
+      card.classList.toggle("done", d === boxes.length && boxes.length > 0);
+    });
+    document.querySelectorAll(".bw").forEach(g => {
+      const bx = g.querySelectorAll("input[type=checkbox]");
+      g.querySelector(".lt").classList.toggle("ok", [...bx].every(b => b.checked));
+    });
+    const p = total ? Math.round(done / total * 100) : 0;
+    document.getElementById("meterFill").style.width = p + "%";
+    document.getElementById("pct").textContent = p + "%";
+  }
+
+  // ---------- MOD calculator ----------
+  const fmt = (x, d = 1) => (Math.floor(x * 10 ** d) / 10 ** d).toFixed(d);
+  function calc() {
+    const raw = parseFloat(state.fields.o2);
+    const pp = parseFloat(state.fields.ppmax) || 1.4;
+    const depth = parseFloat(state.fields.maxDepth);
+    const out = id => document.getElementById(id);
+    const al = out("o_alert");
+    al.className = "alert";
+    if (!(raw >= 21 && raw <= 100)) { ["o_mix","o_mod","o_mod16","o_ppd"].forEach(i => out(i).textContent = "–"); return; }
+    const o2 = Math.ceil(raw - 1e-9);
+    const f = o2 / 100;
+    const mod = (pp / f - 1) * 10, mod16 = (1.6 / f - 1) * 10;
+    out("o_mix").textContent = o2 === 21 ? "Air" : "EAN" + o2;
+    out("o_mod").textContent = fmt(mod) + " m";
+    out("o_mod16").textContent = fmt(mod16) + " m";
+    const msgs = [];
+    let bad = false;
+    if (pp > 1.4) { msgs.push(`Max ppO₂ ${pp} is above the 1.4 bar working limit — use 1.6 only as a contingency.`); bad = true; }
+    if (o2 > 40) { msgs.push("Above 40% O₂: equipment must be oxygen-clean, and this exceeds recreational EAN40 limits."); bad = true; }
+    if (depth > 0) {
+      const ppd = f * (depth / 10 + 1);
+      out("o_ppd").textContent = ppd.toFixed(2) + " bar";
+      if (depth > mod) { msgs.unshift(`Planned max depth ${depth} m is deeper than the MOD (${fmt(mod)} m). Choose a leaner mix or a shallower plan.`); bad = true; }
+      else msgs.unshift(`Planned max depth ${depth} m is within the MOD with ${fmt(mod - depth)} m to spare.`);
+    } else out("o_ppd").textContent = "–";
+    if (msgs.length) { al.innerHTML = msgs.join("<br>"); al.className = "alert show " + (bad ? "bad" : "good"); }
+  }
+
+  // ---------- events ----------
+  document.addEventListener("change", e => {
+    const t = e.target;
+    if (t.dataset.c) { state.checks[t.dataset.c] = t.checked; save(); progress(); }
+  });
+  document.addEventListener("input", e => {
+    const t = e.target;
+    if (t.dataset.k) {
+      state.fields[t.dataset.k] = t.value;
+      if (t === gasSel) setNitrox(t.value === "nitrox");
+      save(); calc(); progress();
+    }
+  });
+  nxToggle.addEventListener("change", () => { setNitrox(nxToggle.checked); save(); progress(); });
+  document.querySelectorAll("details.card").forEach(d =>
+    d.addEventListener("toggle", () => { state.open[d.dataset.s] = d.open; save(); }));
+
+  document.getElementById("printBtn").addEventListener("click", () => {
+    document.querySelectorAll("details.card").forEach(d => d.open = true);
+    window.print();
+  });
+
+  const resetBtn = document.getElementById("resetBtn");
+  let armTimer = null;
+  resetBtn.addEventListener("click", () => {
+    if (!resetBtn.classList.contains("armed")) {
+      resetBtn.classList.add("armed"); resetBtn.textContent = "Tap to clear";
+      armTimer = setTimeout(() => { resetBtn.classList.remove("armed"); resetBtn.textContent = "New dive"; }, 3000);
+      return;
+    }
+    clearTimeout(armTimer);
+    // keep buddy, gas and reserve between dives; clear the rest
+    const keep = { buddy: state.fields.buddy, reserve: state.fields.reserve, gas: state.fields.gas, ppmax: state.fields.ppmax, lost: state.fields.lost };
+    state = { checks: {}, fields: Object.fromEntries(Object.entries(keep).filter(([, v]) => v !== undefined && v !== "")), nitrox: state.nitrox, open: {} };
+    save(); location.reload();
+  });
+
+  calc(); progress();
+})();
+</script>
+</body>
+</html>
